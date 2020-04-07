@@ -1,0 +1,356 @@
+#!/usr/bin/env python
+#Pyton 3.8.2 is necessary
+import sys
+import subprocess, os
+import datetime
+import uuid
+import json
+from enum import Enum  #Necessary module loading on mac:pip3 install enum34
+from subprocess import Popen, PIPE, STDOUT #Necessary module loading: pip3 install subprocess32
+from tabulate import tabulate #Necessary module loading: pip3 install tabulate
+
+#Concept
+"""For every user creates tree with all data, related tro gas module. This tree calls 'User tree' and may be found by ref in format refs/gas/username
+Users tree contains pair tree-blob for each workstation. Tree contains project state at specified workstation and calls 'State tree'
+Blob contains metadata as list of key-value pairs. This lbob calls 'MetaBlob'. 
+"""
+
+#Ideas
+# Разделить код между файлами. Переделать константы под стиль Питона и вынести в отдельный фаил.
+# Проверить что все работает после разлиных git prune=now и вызовов gc
+
+#1. Autosafe frequency setting
+#2. Silence flag for manual save call
+#4. Flag --no-current or -nc for list and restore commands. Hides current workstation from list. If exists one and only one other workstation autosave, it should be immideately restored without list showing.
+#6. Make messages colored. It is very actual for messages st initialisation.
+#7. Change gas.origin setuping at init. Init should provide list with remotes and ask user to select. Not to enter remote name manually. IT will be more easy for user and prewent problems with mistake at names.
+
+#Documentation
+#1. Util supports few worktree in same repo - user should set workstatiob id and title locally. This should be described at wiki.
+#2. For restore forced means restore qithout quiestion if only one available
+
+gasIndex = "gas_index"
+refsDir = "refs/gas/"
+metaBlobPrefix = "meta."
+stateTreePrefix = "state."
+preRestoreTitle = "Pre-restore"
+preRestoreId = "pre-restore-id"
+savesListHeaders = ["#", "", "Workstation", "Save time", "State tree SHA"]
+
+#TODO: Implement configs and meta keys as enums
+configWorkstationId = "gas.workstation.id"
+configWorkstationTitle = "gas.workstation.title"
+configRemote = "gas.remote"
+
+metaTimeKey = "time"
+metaWorkstationIdKey = "workstationId"
+metaWorkstationTitleKey = "workstationTitle"
+metaStateKey = "state"
+
+class Messages(Enum):
+    invalidFlagFormat = "Undefined flag {} will be ignored"
+    noSavesAvailable = "No saves available"
+    nothingToSave = "Nothing to save"
+    saveSelectionMessage = "Please, enter index of autosave to restoring. Enter anything else to cancel.\n"
+    workstationIdSettedFormat = "Workstation id is: {}. Please don't change it."
+    workstationTitleInputMessage = "Please, specify workstation title\n"
+    workstationTitleSettedFormat = "Current workstation title is {}. You may change it by '{}' at git config."
+    remoteInputMessage = "Please, specify name of remote, which should be used for autosaving. Skip for use origin.\n"
+    remoteSettedFormat = "Current remote is {}. You may change it by '{}' at git config."
+    clearApproveMessage = "All saved states will be removed. Are you sure? (y/m)"
+
+class Flags(Enum):
+    quiet = ["--quiet", "-q"]
+    forced = ["--forced", "-f"]
+    noCurrent = ["--no-current", "-nc"]
+    noPreRestore = ["--no-pre-restore", "-npr"]
+
+class ObjectType(Enum):
+    Invalid = 0
+    Commit = 1
+    Tree = 2
+    File = 3
+    
+class Subcommands(Enum):
+    List = "list"
+    Save = "save"
+    Restore = "restore"
+    Help = "help"
+    Init = "init"
+    Clear = "clear"
+
+# Utils
+def run(cmd, env=None, cwd=None, errors=None, out=PIPE):
+    result = subprocess.run(cmd.split(" "), stdout=out, stderr=errors, encoding=sys.stdout.encoding, env=env, cwd=cwd)
+    return result.stdout.rstrip()
+
+def call(cmd, env=None, cwd=None, errors=None, out=PIPE):
+    subprocess.call(cmd.split(" "), stdout=out, stderr=errors, encoding=sys.stdout.encoding, env=env, cwd=cwd)
+
+def popenCommunicate(cmd, inData):
+    process = Popen(cmd.split(" "), stdout=PIPE, stdin=PIPE, encoding=sys.stdout.encoding)
+    return process.communicate(input=inData)[0].rstrip()
+
+def mainDir():
+    return run('git rev-parse --show-toplevel') + "/" #TODO: Change to path separator related to os or remove
+
+def lastListElement(list):
+    legth = len(test_list)
+    if legth > 0:
+        return list[legth - 1]
+
+def nomalisedUsername():
+    return getFromConfig("user.name").replace(" ", ".")
+
+def userTreeRef():
+    return refsDir + nomalisedUsername()
+
+def userTree():
+    return run("git rev-parse " +  userTreeRef())
+
+def metaBlobName(customId=None):
+    workstationId = customId if customId else getFromConfig(configWorkstationId)
+    return metaBlobPrefix + workstationId
+
+def stateTreeName(customId=None):
+    workstationId = customId if customId else getFromConfig(configWorkstationId)
+    return stateTreePrefix + workstationId
+
+def setToConfig(setting, value, isGlobal=False):
+    globalComponent = " --global" if isGlobal else ""
+    call("git config " + setting + " " + value + globalComponent)
+
+def getFromConfig(setting):
+    return run("git config " + setting)  
+
+def itemSha(item):
+    shaAndName = item.split(" ")[2]
+    return shaAndName.split("\t")[0]
+
+def blobItem(sha, title):
+    return "100644 blob " + sha + "\t" + title
+    
+def treeItem(sha, title):
+    return "040000 tree " + sha + "\t" + title
+
+def createTree(items):
+    data = os.linesep.join(items)
+    return popenCommunicate("git mktree", data)
+
+def createMetaBlob(state, customTitle=None, customId=None):
+    workstationId = customId if customId else getFromConfig(configWorkstationId)
+    workstationTitle = customTitle if customTitle else getFromConfig(configWorkstationTitle)
+    now = datetime.datetime.now()
+    meta = {
+        metaWorkstationIdKey: workstationId,
+        metaWorkstationTitleKey: workstationTitle,
+        metaTimeKey: now.strftime("%Y-%m-%d %H:%M:%S"),
+        metaStateKey: state
+    }
+    metaJson = json.dumps(meta)
+    return popenCommunicate("git hash-object -w --stdin", metaJson)
+
+def createStateTree():
+    env = os.environ.copy()
+    env["GIT_INDEX_FILE"] = ".git/" + gasIndex
+    call("git add .", env)
+    return run("git write-tree", env=env)
+
+def treeItems(sha):
+    listing = run("git ls-tree " + sha).splitlines()
+    iterator = map(str.rstrip, listing)
+    return list(iterator)
+
+def updateMetaInItems(items, metaBlobSha, customId=None):
+    blobName = metaBlobName(customId)
+    newItems = list(filter(lambda item: not blobName in item, items))
+    newItems.append(blobItem(metaBlobSha, blobName))
+    return newItems
+
+def getStateFromItems(items):
+    treeName = stateTreeName()
+    filtered = list(filter(lambda item: treeName in item, items))
+    item = next(iter(filtered), None)
+    if item:
+        return itemSha(str(item))
+    else:
+        return ""
+
+def updateStateInItems(items, stateTreeSha, customId=None):
+    stateTree = stateTreeName(customId)
+    newItems = list(filter(lambda item: not stateTree in item, items))
+    newItems.append(treeItem(stateTreeSha, stateTree))
+    return newItems
+    
+def metaListRow(metaDict, index):
+    status = "Current: " if metaDict[metaWorkstationIdKey] == getFromConfig(configWorkstationId) else ""
+    return [index, status, metaDict[metaWorkstationTitleKey], metaDict[metaTimeKey], metaDict[metaStateKey]]
+
+def metaDict(sha):
+    metaJson = run("git cat-file -p " + sha)
+    return json.loads(metaJson)
+  
+def availableMetas(noCurrent=False):
+    tree = userTree()
+    items = treeItems(tree)
+    blobs = filter(lambda item: metaBlobPrefix in item, items)
+    if noCurrent:
+        currentId = getFromConfig(configWorkstationId)
+        blobs = filter(lambda item: not currentId in item, blobs)
+    metasSha = list(map(itemSha, blobs))
+    return list(map(metaDict, metasSha))
+    
+def printMetasDicts(metasDicts):
+    def createRow(metaDict): return metaListRow(metaDict, metasDicts.index(metaDict))
+    rows = list(map(createRow, metasDicts))
+    print(tabulate(rows, headers=savesListHeaders))
+
+def fetchUserRef(hideErrors=False):
+    remote = getFromConfig(configRemote)
+    ref = userTreeRef()
+    errors = subprocess.DEVNULL if hideErrors else None
+    call("git fetch --quiet -f " + remote + " " + ref + ":" + ref, errors=errors)
+
+def renewUserRef(treeSha, quiet=False, renewRemote=True):
+    quietComponent = " --quiet" if quiet else ""
+    call("git update-ref " + userTreeRef() + " " + treeSha)
+    if renewRemote:
+        call("git push --force " + getFromConfig(configRemote) + " " + userTreeRef() + quietComponent)
+
+def saveCurrentState(quiet=False, customTitle=None, customId=None):
+    items = treeItems(userTree())
+    state = createStateTree()
+    meta = createMetaBlob(state, customTitle=customTitle, customId=customId)
+    items = updateMetaInItems(items, meta, customId=customId)
+    items = updateStateInItems(items, state, customId=customId)
+    newUserTree = createTree(items)
+    renewUserRef(newUserTree, quiet=quiet)
+
+def flagForString(string): 
+    for name, flag in Flags.__members__.items():
+        if string in flag.value:
+            return flag
+                
+def flagsForStrings(strings): 
+    flags = []
+    for string in strings:
+        flag = flagForString(string)
+        if flag:
+            flags.append(flag)
+        else:
+            print(Messages.invalidFlagFormat.value.format(string))
+    return flags
+
+#Commands
+def init():
+    workstationId = getFromConfig(configWorkstationId)
+    if not workstationId:
+        workstationId = str(uuid.uuid1())
+        setToConfig(configWorkstationId, workstationId, isGlobal=True)
+    print(Messages.workstationIdSettedFormat.value.format(workstationId))
+    
+    workstationTitle = getFromConfig(configWorkstationTitle)
+    if not workstationTitle:
+        workstationTitle = input(Messages.workstationTitleInputMessage.value)
+        setToConfig(configWorkstationTitle, workstationTitle, isGlobal=True)
+    print(Messages.workstationTitleSettedFormat.value.format(workstationTitle, configWorkstationTitle))
+    
+    remote = getFromConfig(configRemote)
+    if not remote:
+        remote = input(Messages.remoteInputMessage.value)
+        if not remote:
+            remote = "origin"
+        setToConfig(configRemote, remote)
+    print(Messages.remoteSettedFormat.value.format(remote, configRemote))
+    
+    fetchUserRef(hideErrors=True)
+    userTree = run("git rev-parse --verify --quiet " + userTreeRef())
+    if not userTree:
+        tree = createTree([])
+        renewUserRef(tree, quiet=True)
+
+def showHelp():
+    print("Help stub")
+    
+def restore(flags=[]):
+    quiet = Flags.quiet in flags
+    noCurrent = Flags.noCurrent in flags
+    forced = Flags.forced in flags
+    noPreRestore = Flags.noPreRestore in flags
+
+    fetchUserRef()
+    
+    metasDicts = availableMetas(noCurrent=noCurrent)
+    if not metasDicts:
+        print(Messages.noSavesAvailable.value)
+        return
+    
+    if len(metasDicts) > 1 or not forced:
+        printMetasDicts(metasDicts)
+        try:
+            index = int(input(Messages.saveSelectionMessage.value))
+            if index < 0 or index >= len(metasDicts):
+                return
+        except:
+            return
+    else:
+        index = 0
+    
+    if not noPreRestore:
+        saveCurrentState(quiet=quiet, customTitle=preRestoreTitle, customId=preRestoreId)
+    
+    state = metasDicts[index][metaStateKey]
+    cwd = mainDir().encode(sys.stdout.encoding)
+    
+    quietComponent = " --quiet" if quiet else ""
+    call("git read-tree " + state + quietComponent, cwd=cwd)
+    call("git clean -f -d" + quietComponent, cwd=cwd)
+    call("git checkout ." + quietComponent, cwd=cwd)
+    call("git read-tree HEAD" + quietComponent, cwd=cwd)
+    
+def save(flags=[]):
+    items = treeItems(userTree())
+    state = createStateTree()
+    oldState = getStateFromItems(items)
+    forced = Flags.forced in flags
+    quiet = Flags.quiet in flags
+    
+    if state == oldState and not forced:
+        print(Messages.nothingToSave.value)
+        return
+    
+    saveCurrentState(quiet=quiet)
+
+def showList():
+    fetchUserRef()
+    metasDicts = availableMetas()
+    printMetasDicts(metasDicts)
+
+def clear():
+    approve = input(Messages.clearApproveMessage.value)
+    if not approve == "y":
+        return
+    
+    clearTree = createTree([])
+    renewUserRef(clearTree, quiet=True)
+
+def main(): 
+    if len(sys.argv) < 2:
+        showHelp()
+        return
+
+    subcomand = sys.argv[1]
+    flagsArgs = sys.argv[2:]
+    flags = flagsForStrings(flagsArgs)
+
+    switcher = {
+        Subcommands.Restore.value: restore,
+        Subcommands.Save.value: save,
+        Subcommands.List.value: showList,
+        Subcommands.Init.value: init,
+        Subcommands.Clear.value: clear
+    }
+    func = switcher.get(subcomand, lambda flags: showHelp())
+    func(flags)
+    
+main()
