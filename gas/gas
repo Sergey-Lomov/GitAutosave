@@ -1,12 +1,13 @@
 #!/usr/bin/env python
-#Pyton 3.8.2 is necessary
+#Pyton 3 is necessary
 import sys
 import subprocess, os
 import datetime
 import uuid
 import json
+import shlex
 from enum import Enum  #Necessary module loading on mac:pip3 install enum34
-from subprocess import Popen, PIPE, STDOUT #Necessary module loading: pip3 install subprocess32
+from subprocess import PIPE, STDOUT #Necessary module loading: pip3 install subprocess32
 from tabulate import tabulate #Necessary module loading: pip3 install tabulate
 
 #Concept
@@ -36,6 +37,7 @@ stateTreePrefix = "state."
 preRestoreTitle = "Pre-restore"
 preRestoreId = "pre-restore-id"
 savesListHeaders = ["#", "", "Workstation", "Save time", "State tree SHA"]
+dateFormat = "%Y-%m-%d %H:%M:%S"
 
 #TODO: Implement configs and meta keys as enums
 configWorkstationId = "gas.workstation.id"
@@ -48,6 +50,7 @@ metaWorkstationTitleKey = "workstationTitle"
 metaStateKey = "state"
 
 class Messages(Enum):
+    notInitMessage = "Looks like gas was not inited at this repo. Use 'gas init' to initialize."
     invalidFlagFormat = "Undefined flag {} will be ignored"
     noSavesAvailable = "No saves available"
     nothingToSave = "Nothing to save"
@@ -65,30 +68,25 @@ class Flags(Enum):
     noCurrent = ["--no-current", "-nc"]
     noPreRestore = ["--no-pre-restore", "-npr"]
 
-class ObjectType(Enum):
-    Invalid = 0
-    Commit = 1
-    Tree = 2
-    File = 3
-    
 class Subcommands(Enum):
-    List = "list"
-    Save = "save"
-    Restore = "restore"
-    Help = "help"
-    Init = "init"
-    Clear = "clear"
+    list = "list"
+    save = "save"
+    restore = "restore"
+    help = "help"
+    init = "init"
+    clear = "clear"
+    start = "start"
 
 # Utils
 def run(cmd, env=None, cwd=None, errors=None, out=PIPE):
-    result = subprocess.run(cmd.split(" "), stdout=out, stderr=errors, encoding=sys.stdout.encoding, env=env, cwd=cwd)
+    result = subprocess.run(shlex.split(cmd), stdout=out, stderr=errors, encoding=sys.stdout.encoding, env=env, cwd=cwd)
     return result.stdout.rstrip()
 
 def call(cmd, env=None, cwd=None, errors=None, out=PIPE):
-    subprocess.call(cmd.split(" "), stdout=out, stderr=errors, encoding=sys.stdout.encoding, env=env, cwd=cwd)
+    subprocess.call(shlex.split(cmd), stdout=out, stderr=errors, encoding=sys.stdout.encoding, env=env, cwd=cwd)
 
 def popenCommunicate(cmd, inData):
-    process = Popen(cmd.split(" "), stdout=PIPE, stdin=PIPE, encoding=sys.stdout.encoding)
+    process = subprocess.Popen(shlex.split(cmd), stdout=PIPE, stdin=PIPE, encoding=sys.stdout.encoding)
     return process.communicate(input=inData)[0].rstrip()
 
 def mainDir():
@@ -107,6 +105,10 @@ def userTreeRef():
 
 def userTree():
     return run("git rev-parse " +  userTreeRef())
+    
+def checkUserTree():
+    userTree = run("git rev-parse --verify --quiet " + userTreeRef())
+    return True if userTree else False
 
 def metaBlobName(customId=None):
     workstationId = customId if customId else getFromConfig(configWorkstationId)
@@ -144,7 +146,7 @@ def createMetaBlob(state, customTitle=None, customId=None):
     meta = {
         metaWorkstationIdKey: workstationId,
         metaWorkstationTitleKey: workstationTitle,
-        metaTimeKey: now.strftime("%Y-%m-%d %H:%M:%S"),
+        metaTimeKey: now.strftime(dateFormat),
         metaStateKey: state
     }
     metaJson = json.dumps(meta)
@@ -242,7 +244,7 @@ def flagsForStrings(strings):
     return flags
 
 #Commands
-def init():
+def init(flags=[]):
     workstationId = getFromConfig(configWorkstationId)
     if not workstationId:
         workstationId = str(uuid.uuid1())
@@ -264,12 +266,11 @@ def init():
     print(Messages.remoteSettedFormat.value.format(remote, configRemote))
     
     fetchUserRef(hideErrors=True)
-    userTree = run("git rev-parse --verify --quiet " + userTreeRef())
-    if not userTree:
+    if not checkUserTree():
         tree = createTree([])
         renewUserRef(tree, quiet=True)
 
-def showHelp():
+def showHelp(flags=[]):
     print("Help stub")
     
 def restore(flags=[]):
@@ -309,30 +310,42 @@ def restore(flags=[]):
     call("git read-tree HEAD" + quietComponent, cwd=cwd)
     
 def save(flags=[]):
+    forced = Flags.forced in flags
+    quiet = Flags.quiet in flags
+
     items = treeItems(userTree())
     state = createStateTree()
     oldState = getStateFromItems(items)
-    forced = Flags.forced in flags
-    quiet = Flags.quiet in flags
-    
+
     if state == oldState and not forced:
         print(Messages.nothingToSave.value)
         return
     
     saveCurrentState(quiet=quiet)
 
-def showList():
+def showList(flags=[]):
     fetchUserRef()
     metasDicts = availableMetas()
     printMetasDicts(metasDicts)
 
-def clear():
+def clear(flags=[]):
     approve = input(Messages.clearApproveMessage.value)
     if not approve == "y":
         return
     
     clearTree = createTree([])
     renewUserRef(clearTree, quiet=True)
+
+def start(flags=[]):
+    forced = Flags.forced in flags
+    autosaveCmd = "echo test1\n\
+    \n echo test2"
+    """while true\n\
+        do\n\
+            echo Test\n\
+            sleep 10\n\
+        done"""
+    subprocess.call(shlex.split(autosaveCmd))
 
 def main(): 
     if len(sys.argv) < 2:
@@ -343,14 +356,19 @@ def main():
     flagsArgs = sys.argv[2:]
     flags = flagsForStrings(flagsArgs)
 
+    if not checkUserTree() and subcomand != Subcommands.init.value:
+        print(Messages.notInitMessage.value)
+        return
+
     switcher = {
-        Subcommands.Restore.value: restore,
-        Subcommands.Save.value: save,
-        Subcommands.List.value: showList,
-        Subcommands.Init.value: init,
-        Subcommands.Clear.value: clear
+        Subcommands.restore.value: restore,
+        Subcommands.save.value: save,
+        Subcommands.list.value: showList,
+        Subcommands.init.value: init,
+        Subcommands.clear.value: clear,
+        Subcommands.start.value: start
     }
-    func = switcher.get(subcomand, lambda flags: showHelp())
+    func = switcher.get(subcomand, lambda flags: showHelp(flags))
     func(flags)
     
 main()
