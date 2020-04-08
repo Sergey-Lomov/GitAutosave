@@ -1,4 +1,4 @@
-import gas
-
+from .gas import main
+   
 if __name__ == '__main__':
-    gas.main()
+   main()

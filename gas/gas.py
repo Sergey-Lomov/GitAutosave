@@ -370,5 +370,3 @@ def main():
     }
     func = switcher.get(subcomand, lambda flags: showHelp(flags))
     func(flags)
-    
-main()
