@@ -13,8 +13,8 @@ from gas.common import messages
 from gas.common.constants import *
 from gas.common.enumerations import Flags, Subcommands
 from gas.utils.subprocess import run, call, popenCommunicate
-from gas.utils.tree import *
-from gas.utils.services import *
+from gas.utils.tree import fetchUserRef, renewUserRef, userTree, checkUserTree, createTree, createStateTree, availableMetas, saveCurrentState, treeItems, getStateFromItems
+from gas.utils.services import getFromConfig, setToConfig, printMetasDicts, mainDir, flagsForStrings
 
 #Data storing concept
 """For every user creates tree with all data, related to gas util. This tree calls 'User tree' and may be found by ref in format refs/gas/username
