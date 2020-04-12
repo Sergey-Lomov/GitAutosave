@@ -2,8 +2,9 @@ import json
 from tabulate import tabulate
 
 from gas.common.constants import *
+from gas.common.messages import invalidFlagFormat
 from gas.common.enumerations import Flags
-from gas.utils.subprocess import run, call
+from gas.utils.execution import run, call
 
 def mainDir():
     return run('git rev-parse --show-toplevel') + "/" #TODO: Change to path separator related to os or remove
@@ -41,12 +42,12 @@ def flagForString(string):
         if string in flag.value:
             return flag
                 
-def flagsForStrings(strings): 
+def flagsForStrings(strings, quite=False): 
     flags = []
     for string in strings:
         flag = flagForString(string)
         if flag:
             flags.append(flag)
-        else:
-            print(messages.invalidFlagFormat.format(string))
+        elif not quite:
+            print(invalidFlagFormat.format(string))
     return flags

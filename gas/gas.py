@@ -2,17 +2,20 @@
 #Pyton 3 is necessary
 import sys
 import subprocess, os
+import time
 import datetime
 import uuid
 import json
 import shlex
+from pathlib import Path
 from enum import Enum  #Necessary module loading on mac:pip3 install enum34
 from subprocess import PIPE, STDOUT #Necessary module loading: pip3 install subprocess32
 
+from gas.utils import autosave_processes
 from gas.common import messages
 from gas.common.constants import *
 from gas.common.enumerations import Flags, Subcommands
-from gas.utils.subprocess import run, call, popenCommunicate
+from gas.utils.execution import run, call, popenCommunicate, backgroundDetachedPopen
 from gas.utils.tree import fetchUserRef, renewUserRef, userTree, checkUserTree, createTree, createStateTree, availableMetas, saveCurrentState, treeItems, getStateFromItems
 from gas.utils.services import getFromConfig, setToConfig, printMetasDicts, mainDir, flagsForStrings
 
@@ -112,23 +115,41 @@ def showList(flags=[]):
     printMetasDicts(metasDicts)
 
 def clean(flags=[]):
-    approve = input(messages.clearApproveMessage)
-    if not approve == "y":
-        return
+    if not Flags.forced in flags:
+        approve = input(messages.clearApproveMessage)
+        if not approve == "y":
+            return
     
     clearTree = createTree([])
     renewUserRef(clearTree, quiet=True)
 
+"""def autosaveRutine():
+    i = 0
+    while i < 5:
+        time.sleep(3)
+        call('echo test')
+        #with open('Autoincrement.txt', 'w') as f:
+            #f.write('Autoincrement ' + str(i))
+        i += 1"""
+
 def start(flags=[]):
-    forced = Flags.forced in flags
-    autosaveCmd = "echo test1\n\
-    \n echo test2"
-    """while true\n\
-        do\n\
-            echo Test\n\
-            sleep 10\n\
-        done"""
-    subprocess.call(shlex.split(autosaveCmd))
+    forcedComponent = " " + Flags.forced.value[0] if Flags.forced in flags else ""
+    period = getFromConfig(configSavePeriod)
+    if not period:
+        print(messages.savePeriodUndefinedFormat.format(configSavePeriod, Subcommands.start.value))
+        return
+    
+    scriptDir = Path(os.path.dirname(__file__))
+    autosaveScript = scriptDir / "utils" / autosaveScriptFile
+    logfilePath = scriptDir / autosaveLogFile
+    print(logfilePath)
+    logfile = open(str(logfilePath), 'w')
+    autosaveCmd = "python '" + str(autosaveScript) + "' " + str(period) + forcedComponent + " " + mainDir()
+    print(autosaveCmd)
+    backgroundDetachedPopen(autosaveCmd, logfile=logfile)
+
+def stop(flags=[]):
+    print(autosave_processes.autosaveProcess(""))
 
 def main(): 
     if len(sys.argv) < 2:
@@ -149,7 +170,8 @@ def main():
         Subcommands.list.value: showList,
         Subcommands.init.value: init,
         Subcommands.clean.value: clean,
-        Subcommands.start.value: start
+        Subcommands.start.value: start,
+        Subcommands.stop.value: stop
     }
     func = switcher.get(subcomand, lambda flags: showHelp(flags))
     func(flags)

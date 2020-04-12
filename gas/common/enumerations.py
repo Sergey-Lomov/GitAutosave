@@ -16,3 +16,4 @@ class Subcommands(Enum):
     init = "init"
     clean = "clean"
     start = "start"
+    stop = "stop"

@@ -7,7 +7,7 @@ from subprocess import DEVNULL
 
 from gas.common.constants import *
 from gas.utils.services import getFromConfig, nomalisedUsername, metaDict
-from gas.utils.subprocess import run, call, popenCommunicate
+from gas.utils.execution import run, call, popenCommunicate
 
 def userTreeRef():
     return refsDir + nomalisedUsername()
