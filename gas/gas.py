@@ -142,14 +142,12 @@ def start(flags=[]):
     scriptDir = Path(os.path.dirname(__file__))
     autosaveScript = scriptDir / "utils" / autosaveScriptFile
     logfilePath = scriptDir / autosaveLogFile
-    print(logfilePath)
     logfile = open(str(logfilePath), 'w')
     autosaveCmd = "python '" + str(autosaveScript) + "' " + str(period) + forcedComponent + " " + mainDir()
-    print(autosaveCmd)
     backgroundDetachedPopen(autosaveCmd, logfile=logfile)
 
 def stop(flags=[]):
-    print(autosave_processes.autosaveProcess(""))
+    print(autosave_processes.processForDir(""))
 
 def main(): 
     if len(sys.argv) < 2:

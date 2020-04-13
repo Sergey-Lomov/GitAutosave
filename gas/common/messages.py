@@ -13,3 +13,4 @@ remoteSettedFormat = "Current remote is {}. You may change it by '{}' at git con
 clearApproveMessage = "All saved states will be removed. Are you sure? (y/n) "
 savePeriodUndefinedFormat = "Autosaving unavailable because autosave period is undefined. You may specify autosave period by '{}' config key and restart autosaving uses {} command."
 runAutosaveWithoutPeriodMessage = "Autosave script was called with no period"
+autosaveProcessMissedMessage = "Autosave process not runned at this repo. Use 'gas autosave --list' to show all runned autosave processes." #TODO: validate recomended command
