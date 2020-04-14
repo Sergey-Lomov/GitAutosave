@@ -10,6 +10,7 @@ savesListHeaders = ["#", "", "Workstation", "Save time", "State tree SHA"]
 dateFormat = "%Y-%m-%d %H:%M:%S"
 autosaveScriptFile = "gas.autosave.py"
 autosaveLogFile = "autosave.log"
+unknownAutosaveDir = "unknown"
 
 #TODO: Implement configs and meta keys as enums
 configWorkstationId = "gas.workstation.id"

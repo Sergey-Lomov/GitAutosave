@@ -5,8 +5,7 @@ import platform
 import wmi  # pip install WMI, pip install pywin32
 
 from gas.utils.execution import run
-from gas.common.messages import *
-from gas.common.constants import autosaveScriptFile
+from gas.common.constants import autosaveScriptFile, unknownAutosaveDir
 
 class AutosaveProcess:
     def __init__(self, pid, directory):
@@ -15,16 +14,30 @@ class AutosaveProcess:
 
 def __processesWin():
     _wmi = wmi.WMI()
-    wql = "SELECT CommandLine, ProcessId FROM Win32_Process WHERE commandline LIKE '%" + autosaveScriptFile "%'"
-    return _wmi.query(wql).first
+    wql = "SELECT CommandLine, ProcessId FROM Win32_Process WHERE commandline LIKE '%" + autosaveScriptFile + "%'"
+    processes = list()
+    for process in _wmi.query(wql):
+        pid = process.ProcessId
+        directory = unknownAutosaveDir
+        commandComponents = process.CommandLine.split("~") 
+        if len(commandComponents) >= 1:
+            directory = commandComponents[-1]
+        processes.append(AutosaveProcess(pid, directory))
+    return processes
 
-def processForDir(dir):
+def allProcesses():
     if platform.system() == "Windows":
-        process = __processForDirWin(dir)
+        return __processesWin()
     else:
         #Only MAC OS is currently supported, but lets try
         return "Mac OS"
-      
-    if not process:
-        print(autosaveProcessMissedMessage)
+
+def processForDir(dir):
+    return next( filter(lambda item: dir == item.directory, allProcesses()), None)
+
+def terminateProcess(process):
+    _wmi = wmi.WMI()
+    for process in _wmi.Win32_Process (ProcessId=process.pid):
+        process.Terminate()
+    
     

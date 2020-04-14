@@ -11,7 +11,7 @@ from pathlib import Path
 from enum import Enum  #Necessary module loading on mac:pip3 install enum34
 from subprocess import PIPE, STDOUT #Necessary module loading: pip3 install subprocess32
 
-from gas.utils import autosave_processes
+from gas.utils.autosave_processes import processForDir, terminateProcess 
 from gas.common import messages
 from gas.common.constants import *
 from gas.common.enumerations import Flags, Subcommands
@@ -123,31 +123,31 @@ def clean(flags=[]):
     clearTree = createTree([])
     renewUserRef(clearTree, quiet=True)
 
-"""def autosaveRutine():
-    i = 0
-    while i < 5:
-        time.sleep(3)
-        call('echo test')
-        #with open('Autoincrement.txt', 'w') as f:
-            #f.write('Autoincrement ' + str(i))
-        i += 1"""
-
 def start(flags=[]):
     forcedComponent = " " + Flags.forced.value[0] if Flags.forced in flags else ""
     period = getFromConfig(configSavePeriod)
     if not period:
         print(messages.savePeriodUndefinedFormat.format(configSavePeriod, Subcommands.start.value))
         return
+        
+    stop([Flags.quiet])
     
     scriptDir = Path(os.path.dirname(__file__))
     autosaveScript = scriptDir / "utils" / autosaveScriptFile
     logfilePath = scriptDir / autosaveLogFile
     logfile = open(str(logfilePath), 'w')
-    autosaveCmd = "python '" + str(autosaveScript) + "' " + str(period) + forcedComponent + " " + mainDir()
+    autosaveCmd = "python '" + str(autosaveScript) + "' " + str(period) + forcedComponent + " ~" + mainDir()
+    autosaveCmd = "python '" + str(autosaveScript) + "' " + str(period) + forcedComponent + " ~" + mainDir()
     backgroundDetachedPopen(autosaveCmd, logfile=logfile)
 
 def stop(flags=[]):
-    print(autosave_processes.processForDir(""))
+    process = processForDir(mainDir())
+    if not process:
+        if not Flags.quiet in flags:
+            print(messages.autosaveProcessMissedMessage)
+        return
+    terminateProcess(process)
+    
 
 def main(): 
     if len(sys.argv) < 2:
