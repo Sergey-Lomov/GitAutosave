@@ -8,6 +8,8 @@ class Flags(Enum):
     all = ["--all", "-a"]
     noCurrent = ["--no-current", "-nc"]
     noPreRestore = ["--no-pre-restore", "-npr"]
+    start = ["--start", "-S"]
+    stop = ["--stop"]
 
 class Subcommands(Enum):
     list = "list"
@@ -16,5 +18,4 @@ class Subcommands(Enum):
     help = "help"
     init = "init"
     clean = "clean"
-    start = "start"
-    stop = "stop"
+    autosave = "autosave"

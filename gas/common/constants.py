@@ -7,10 +7,12 @@ stateTreePrefix = "state."
 preRestoreTitle = "Pre-restore"
 preRestoreId = "pre-restore-id"
 savesListHeaders = ["#", "", "Workstation", "Save time", "State tree SHA"]
+autosaveProcessesHeaders = ["#", "Directory"]
 dateFormat = "%Y-%m-%d %H:%M:%S"
 autosaveScriptFile = "gas.autosave.py"
 autosaveLogFile = "autosave.log"
 unknownAutosaveDir = "unknown"
+autosaveDirSeparator = "?"
 
 #TODO: Implement configs and meta keys as enums
 configWorkstationId = "gas.workstation.id"

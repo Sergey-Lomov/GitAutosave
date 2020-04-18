@@ -11,13 +11,13 @@ from pathlib import Path
 from enum import Enum  #Necessary module loading on mac:pip3 install enum34
 from subprocess import PIPE, STDOUT #Necessary module loading: pip3 install subprocess32
 
-from gas.utils.autosave_processes import processForDir, terminateProcess 
+from gas.utils.autosave_processes import processForDir, terminateProcess, allProcesses
 from gas.common import messages
 from gas.common.constants import *
 from gas.common.enumerations import Flags, Subcommands
 from gas.utils.execution import run, call, popenCommunicate, backgroundDetachedPopen
 from gas.utils.tree import fetchUserRef, renewUserRef, userTree, checkUserTree, createTree, createStateTree, availableMetas, saveCurrentState, treeItems, getStateFromItems
-from gas.utils.services import getFromConfig, setToConfig, printMetasDicts, mainDir, flagsForStrings
+from gas.utils.services import getFromConfig, setToConfig, printMetasDicts, printAutosaveProcesses, mainDir, flagsForStrings
 
 #Data storing concept
 """For every user creates tree with all data, related to gas util. This tree calls 'User tree' and may be found by ref in format refs/gas/username
@@ -123,24 +123,23 @@ def clean(flags=[]):
     clearTree = createTree([])
     renewUserRef(clearTree, quiet=True)
 
-def start(flags=[]):
+def startAutosave(flags=[]):
     forcedComponent = " " + Flags.forced.value[0] if Flags.forced in flags else ""
     period = getFromConfig(configSavePeriod)
     if not period:
         print(messages.savePeriodUndefinedFormat.format(configSavePeriod, Subcommands.start.value))
         return
         
-    stop([Flags.quiet])
+    stopAutosave([Flags.quiet])
     
     scriptDir = Path(os.path.dirname(__file__))
     autosaveScript = scriptDir / "utils" / autosaveScriptFile
     logfilePath = scriptDir / autosaveLogFile
     logfile = open(str(logfilePath), 'w')
-    autosaveCmd = "python '" + str(autosaveScript) + "' " + str(period) + forcedComponent + " ~" + mainDir()
-    autosaveCmd = "python '" + str(autosaveScript) + "' " + str(period) + forcedComponent + " ~" + mainDir()
+    autosaveCmd = "python '" + str(autosaveScript) + "' " + str(period) + forcedComponent + " " + autosaveDirSeparator + mainDir()
     backgroundDetachedPopen(autosaveCmd, logfile=logfile)
 
-def stop(flags=[]):
+def stopAutosave(flags=[]):
     process = processForDir(mainDir())
     if not process:
         if not Flags.quiet in flags:
@@ -148,6 +147,31 @@ def stop(flags=[]):
         return
     terminateProcess(process)
     
+def autosave(flags=[]):
+    if Flags.start in flags:
+        startAutosave(flags)
+        return
+        
+    if Flags.stop in flags:
+        stopAutosave(flags)
+        return
+        
+    processes = allProcesses()
+    if len(processes) == 0:
+        print(messages.noAutosavesRunnedMessage)
+        return
+
+    printAutosaveProcesses(processes)
+    
+    try:
+        index = int(input(messages.autosaveSelectionMessage).rstrip())
+    except ValueError:
+        index = None
+
+    if index is None or index < 0 or index > len(processes) - 1:
+        return
+    
+    terminateProcess(processes[index])
 
 def main(): 
     if len(sys.argv) < 2:
@@ -158,6 +182,7 @@ def main():
     flagsArgs = sys.argv[2:]
     flags = flagsForStrings(flagsArgs)
 
+    possibleWithoutInit = subcomand == Subcommands.init.value or (subcomand == Subcommands.autosave and len(flags) == 0)
     if not checkUserTree() and subcomand != Subcommands.init.value:
         print(messages.notInitMessage)
         return
@@ -168,8 +193,7 @@ def main():
         Subcommands.list.value: showList,
         Subcommands.init.value: init,
         Subcommands.clean.value: clean,
-        Subcommands.start.value: start,
-        Subcommands.stop.value: stop
+        Subcommands.autosave.value: autosave,
     }
     func = switcher.get(subcomand, lambda flags: showHelp(flags))
     func(flags)

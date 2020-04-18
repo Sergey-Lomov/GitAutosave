@@ -5,6 +5,7 @@ from gas.common.constants import *
 from gas.common.messages import invalidFlagFormat
 from gas.common.enumerations import Flags
 from gas.utils.execution import run, call
+from gas.utils.autosave_processes import AutosaveProcess
 
 def mainDir():
     return run('git rev-parse --show-toplevel') + "/" #TODO: Change to path separator related to os or remove
@@ -28,6 +29,9 @@ def metaListRow(metaDict, index):
     status = "Current: " if metaDict[metaWorkstationIdKey] == getFromConfig(configWorkstationId) else ""
     return [index, status, metaDict[metaWorkstationTitleKey], metaDict[metaTimeKey], metaDict[metaStateKey]]
 
+def autosaveProcessRow(process, index):
+    return [index, process.directory]
+
 def metaDict(sha):
     metaJson = run("git cat-file -p " + sha)
     return json.loads(metaJson)
@@ -36,6 +40,11 @@ def printMetasDicts(metasDicts):
     def createRow(metaDict): return metaListRow(metaDict, metasDicts.index(metaDict))
     rows = list(map(createRow, metasDicts))
     print(tabulate(rows, headers=savesListHeaders))
+    
+def printAutosaveProcesses(processes):
+    def createRow(process): return autosaveProcessRow(process, processes.index(process))
+    rows = list(map(createRow, processes))
+    print(tabulate(rows, headers=autosaveProcessesHeaders))
 
 def flagForString(string): 
     for name, flag in Flags.__members__.items():
