@@ -2,7 +2,9 @@
 
 import sys
 import platform
-import wmi  # pip install WMI, pip install pywin32
+
+if platform.system() == "Windows":
+    import wmi # pip install WMI, pip install pywin32
 
 from gas.utils.execution import run
 from gas.common.constants import autosaveScriptFile, unknownAutosaveDir, autosaveDirSeparator
