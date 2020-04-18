@@ -2,11 +2,12 @@
 
 import sys
 import platform
+import subprocess
 
 if platform.system() == "Windows":
     import wmi # pip install WMI, pip install pywin32
 
-from gas.utils.execution import run
+from gas.utils.execution import run, call
 from gas.common.constants import autosaveScriptFile, unknownAutosaveDir, autosaveDirSeparator
 
 class AutosaveProcess:
@@ -27,10 +28,35 @@ def __processesWin():
         processes.append(AutosaveProcess(pid, directory))
     return processes
 
+def __processesMac():
+    """psProc = subprocess.Popen(["ps", "aux"], stdout=subprocess.PIPE)
+    grepProc = subprocess.Popen(["grep", "--", "t 15"], stdin=psProc.stdout, stdout=subprocess.PIPE)
+    psProc.stdout.close()
+    out, err = grepProc.communicate()
+
+    for line in out.splitlines():
+        pid = line.decode(sys.stdout.encoding).split("t")[1]
+        print(pid)"""
+    processes = list()
+    results = run("pgrep -fl -- " + autosaveScriptFile)
+    
+    for line in results.splitlines():
+        pid = line.split(" ")[0]
+        directory = unknownAutosaveDir
+        components = line.split(autosaveDirSeparator)
+        if len(components) >= 1:
+            directory = components[-1]
+        processes.append(AutosaveProcess(pid, directory))
+
+    return processes
+
 def __terminateProcessWin(process):
     _wmi = wmi.WMI()
     for winProcess in _wmi.Win32_Process (ProcessId=process.pid):
         winProcess.Terminate()
+
+def __terminateProcessMac(process):
+    call("kill -9 " + process.pid)
 
 def processForDir(dir):
     return next( filter(lambda item: dir == item.directory, allProcesses()), None)
@@ -39,13 +65,11 @@ def allProcesses():
     if platform.system() == "Windows":
         return __processesWin()
     else:
-        #Only MAC OS is currently supported, but lets try
-        return "Mac OS"
+        return __processesMac()
 
 def terminateProcess(process):
     if platform.system() == "Windows":
-        return __terminateProcessWin(process)
+        __terminateProcessWin(process)
     else:
-        #Only MAC OS is currently supported, but lets try
-        return "Mac OS"
+        __terminateProcessMac(process)
     

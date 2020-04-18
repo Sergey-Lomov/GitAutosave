@@ -127,7 +127,7 @@ def startAutosave(flags=[]):
     forcedComponent = " " + Flags.forced.value[0] if Flags.forced in flags else ""
     period = getFromConfig(configSavePeriod)
     if not period:
-        print(messages.savePeriodUndefinedFormat.format(configSavePeriod, Subcommands.start.value))
+        print(messages.savePeriodUndefinedFormat.format(configSavePeriod, Subcommands.autosave.value + " " + Flags.start.value[0]))
         return
         
     stopAutosave([Flags.quiet])
@@ -145,6 +145,10 @@ def stopAutosave(flags=[]):
         if not Flags.quiet in flags:
             print(messages.autosaveProcessMissedMessage)
         return
+
+    if not Flags.quiet in flags:
+        print(messages.autosaveTerminationFormat.format(process.directory))
+
     terminateProcess(process)
     
 def autosave(flags=[]):
@@ -171,6 +175,9 @@ def autosave(flags=[]):
     if index is None or index < 0 or index > len(processes) - 1:
         return
     
+    if not Flags.quiet in flags:
+        print(messages.autosaveTerminationFormat.format(process.directory))
+
     terminateProcess(processes[index])
     
 def showVersion(flags=[]):

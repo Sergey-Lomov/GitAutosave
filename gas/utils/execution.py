@@ -11,11 +11,20 @@ def run(cmd, env=None, cwd=None, errors=None, out=PIPE):
     result = subprocess.run(shlex.split(cmd), stdout=out, stderr=errors, encoding=sys.stdout.encoding, env=env, cwd=cwd)
     return result.stdout.rstrip()
 
-def call(cmd, env=None, cwd=None, errors=None, out=PIPE, hideCLI=False):
+def __callWin(cmd, env, cwd, errors, out, hideCLI):
     startupinfo = subprocess.STARTUPINFO()
     if hideCLI:
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
     subprocess.call(shlex.split(cmd), stdout=out, stderr=errors, encoding=sys.stdout.encoding, env=env, cwd=cwd, startupinfo=startupinfo)
+
+def __callMac(cmd, env, cwd, errors, out, hideCLI):
+    subprocess.call(shlex.split(cmd), stdout=out, stderr=errors, encoding=sys.stdout.encoding, env=env, cwd=cwd)
+
+def call(cmd, env=None, cwd=None, errors=None, out=PIPE, hideCLI=False):
+    if platform.system() == 'Windows':
+        __callWin(cmd, env, cwd, errors, out, hideCLI)
+    else:
+        __callMac(cmd, env, cwd, errors, out, hideCLI) 
 
 def popenCommunicate(cmd, inData, cwd=None):
     process = subprocess.Popen(shlex.split(cmd), stdout=PIPE, stdin=PIPE, encoding=sys.stdout.encoding, cwd=cwd)
