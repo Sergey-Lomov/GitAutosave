@@ -185,7 +185,14 @@ def main():
     flagsArgs = sys.argv[2:]
     flags = flagsForStrings(flagsArgs)
 
-    possibleWithoutInit = subcomand == Subcommands.init.value or (subcomand == Subcommands.autosave and len(flags) == 0)
+    possibleWithoutInit = False
+    if subcomand == Subcommands.init.value:
+        possibleWithoutInit = True
+    if subcomand == Subcommands.version.value:
+        possibleWithoutInit = True
+    if subcomand == Subcommands.autosave and len(flags) == 0:
+        possibleWithoutInit = True
+    
     if not checkUserTree() and subcomand != Subcommands.init.value:
         print(messages.notInitMessage)
         return
