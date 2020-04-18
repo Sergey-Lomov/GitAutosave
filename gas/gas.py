@@ -193,9 +193,10 @@ def main():
     if subcomand == Subcommands.autosave and len(flags) == 0:
         possibleWithoutInit = True
     
-    if not checkUserTree() and subcomand != Subcommands.init.value:
-        print(messages.notInitMessage)
-        return
+    if not possibleWithoutInit:
+        if not checkUserTree():
+            print(messages.notInitMessage)
+            return
 
     switcher = {
         Subcommands.restore.value: restore,
