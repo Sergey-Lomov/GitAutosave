@@ -172,6 +172,9 @@ def autosave(flags=[]):
         return
     
     terminateProcess(processes[index])
+    
+def showVersion(flags=[]):
+    print(version)
 
 def main(): 
     if len(sys.argv) < 2:
@@ -194,6 +197,7 @@ def main():
         Subcommands.init.value: init,
         Subcommands.clean.value: clean,
         Subcommands.autosave.value: autosave,
+        Subcommands.version.value: showVersion,
     }
     func = switcher.get(subcomand, lambda flags: showHelp(flags))
     func(flags)

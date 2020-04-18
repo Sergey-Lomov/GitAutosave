@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+version = "0.1.0"
+
 gasIndex = "gas_index"
 refsDir = "refs/gas/"
 metaBlobPrefix = "meta."

@@ -19,3 +19,4 @@ class Subcommands(Enum):
     init = "init"
     clean = "clean"
     autosave = "autosave"
+    version = "version"
