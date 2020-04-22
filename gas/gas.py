@@ -169,10 +169,11 @@ def autosave(flags=[]):
     if index is None or index < 0 or index > len(processes) - 1:
         return
     
+    process = processes[index]
     if not Flags.quiet in flags:
         print(messages.autosaveTerminationFormat.format(process.directory))
 
-    terminateProcess(processes[index])
+    terminateProcess(process)
     
 def showVersion(flags=[]):
     print(version)
