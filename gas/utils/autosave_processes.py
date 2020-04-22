@@ -29,14 +29,6 @@ def __processesWin():
     return processes
 
 def __processesMac():
-    """psProc = subprocess.Popen(["ps", "aux"], stdout=subprocess.PIPE)
-    grepProc = subprocess.Popen(["grep", "--", "t 15"], stdin=psProc.stdout, stdout=subprocess.PIPE)
-    psProc.stdout.close()
-    out, err = grepProc.communicate()
-
-    for line in out.splitlines():
-        pid = line.decode(sys.stdout.encoding).split("t")[1]
-        print(pid)"""
     processes = list()
     results = run("pgrep -fl -- " + autosaveScriptFile)
     

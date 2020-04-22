@@ -16,7 +16,7 @@ from gas.common import messages
 from gas.common.constants import *
 from gas.common.enumerations import Flags, Subcommands
 from gas.utils.execution import run, call, popenCommunicate, backgroundDetachedPopen
-from gas.utils.tree import registerWorkstation, currentWorkstationRef, checkWorkstationsListRef, createStateTree, availableMetas, saveCurrentState, treeItems, getStateFromItems
+from gas.utils.tree import registerWorkstation, currentWorkstationRef, checkWorkstationsListRef, fetchAllRefs, createStateTree, availableMetas, saveCurrentState, treeItems, getStateFromItems
 from gas.utils.services import getFromConfig, setToConfig, printMetasDicts, printAutosaveProcesses, mainDir, flagsForStrings
 
 #Data storing concept
@@ -197,8 +197,10 @@ def main():
     
     if not possibleWithoutInit:
         if not checkWorkstationsListRef():
-            print(messages.notInitMessage)
-            return
+            fetchAllRefs()
+            if not checkWorkstationsListRef():
+                print(messages.notInitMessage)
+                return
 
     switcher = {
         Subcommands.restore.value: restore,
