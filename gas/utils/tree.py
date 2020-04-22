@@ -90,18 +90,16 @@ def getStateFromItems(items):
 def fetchRef(ref, hideErrors=False):
     remote = getFromConfig(configRemote)
     errors = DEVNULL if hideErrors else None
-    call("git fetch --quiet -f " + remote + " " + ref + ":" + ref, errors=errors)
+    cmd = "git fetch --quiet -f " + remote + " " + ref + ":" + ref
+    print(cmd)
+    call(cmd, errors=errors, out=errors)
 
 def fetchListRef(hideErrors=False):
     ref = workstationsListRef()
     fetchRef(ref, hideErrors)
-"""
-def fetchWorkstationRef(workstation)
-    ref = workstationRef(workstation)
-    fetchRef(ref, hideErrors=True)"""
     
-def fetchAllRefs():
-    fetchListRef()
+def fetchAllRefs(hideErrors=False):
+    fetchListRef(hideErrors)
     for ref in workstationsRefs():
         fetchRef(ref, hideErrors=True)  #ref may be unavailable, if no save available from specified workstation
 

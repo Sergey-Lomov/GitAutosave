@@ -192,15 +192,13 @@ def main():
         possibleWithoutInit = True
     if subcomand == Subcommands.version.value:
         possibleWithoutInit = True
-    if subcomand == Subcommands.autosave and len(flags) == 0:
+    if subcomand == Subcommands.autosave.value and len(flags) == 0:
         possibleWithoutInit = True
     
     if not possibleWithoutInit:
         if not checkWorkstationsListRef():
-            fetchAllRefs()
-            if not checkWorkstationsListRef():
-                print(messages.notInitMessage)
-                return
+            print(messages.notInitMessage)
+            return
 
     switcher = {
         Subcommands.restore.value: restore,

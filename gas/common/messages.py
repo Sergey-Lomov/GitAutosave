@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-notInitMessage = "Looks like gas was not inited at this repo. Use 'gas init' to initialize."
+notInitMessage = "Looks like gas was not initialized at this repo. Use 'gas init' to initialize."
 invalidFlagFormat = "Undefined flag {} will be ignored"
 noSavesAvailable = "No saves available"
 nothingToSave = "Nothing to save"
