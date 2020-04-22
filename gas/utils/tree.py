@@ -9,23 +9,29 @@ from gas.common.constants import *
 from gas.utils.services import getFromConfig, nomalisedUsername, metaDict
 from gas.utils.execution import run, call, popenCommunicate
 
-def userTreeRef():
+def workstationsListRef():
     return refsDir + nomalisedUsername()
-
-def userTree():
-    return run("git rev-parse " +  userTreeRef())
     
-def checkUserTree():
-    userTree = run("git rev-parse --verify --quiet " + userTreeRef())
-    return True if userTree else False
+def workstationRef(workstation):
+    return refsDir + nomalisedUsername() + workstationRefSeparator + workstation
+    
+def currentWorkstationRef():
+    currentId = getFromConfig(configWorkstationId)
+    return workstationRef(currentId)
+    
+def workstationsRefs():
+    workstations = run("git cat-file -p " + workstationsListRef())
+    refs = list()
+    for workstation in workstations.splitlines():
+        refs.append(workstationRef(workstation))
+    return refs
 
-def metaBlobName(customId=None):
-    workstationId = customId if customId else getFromConfig(configWorkstationId)
-    return metaBlobPrefix + workstationId
-
-def stateTreeName(customId=None):
-    workstationId = customId if customId else getFromConfig(configWorkstationId)
-    return stateTreePrefix + workstationId
+def workstationsBlob():
+    return run("git rev-parse " +  workstationsListRef())
+    
+def checkWorkstationsListRef():
+    listRef = run("git rev-parse --verify --quiet " + workstationsListRef())
+    return True if listRef else False
 
 def itemSha(item):
     shaAndName = item.split(" ")[2]
@@ -36,6 +42,11 @@ def blobItem(sha, title):
     
 def treeItem(sha, title):
     return "040000 tree " + sha + "\t" + title
+    
+def treeItems(sha):
+    listing = run("git ls-tree " + sha).splitlines()
+    iterator = map(str.rstrip, listing)
+    return list(iterator)
 
 def createTree(items):
     data = os.linesep.join(items)
@@ -60,59 +71,93 @@ def createStateTree():
     call("git add .", env)
     return run("git write-tree", env=env)
 
-def treeItems(sha):
-    listing = run("git ls-tree " + sha).splitlines()
-    iterator = map(str.rstrip, listing)
-    return list(iterator)
+def updateMetaInItems(items, metaBlobSha):
+    newItems = list(filter(lambda item: not metaBlobName in item, items))
+    newItems.append(blobItem(metaBlobSha, metaBlobName))
+    return newItems
 
-def updateMetaInItems(items, metaBlobSha, customId=None):
-    blobName = metaBlobName(customId)
-    newItems = list(filter(lambda item: not blobName in item, items))
-    newItems.append(blobItem(metaBlobSha, blobName))
+def updateStateInItems(items, stateTreeSha):
+    newItems = list(filter(lambda item: not stateTreeName in item, items))
+    newItems.append(treeItem(stateTreeSha, stateTreeName))
     return newItems
 
 def getStateFromItems(items):
-    treeName = stateTreeName()
-    filtered = list(filter(lambda item: treeName in item, items))
+    filtered = list(filter(lambda item: stateTreeName in item, items))
     item = next(iter(filtered), None)
     if item:
         return itemSha(str(item))
-    else:
-        return ""
 
-def updateStateInItems(items, stateTreeSha, customId=None):
-    stateTree = stateTreeName(customId)
-    newItems = list(filter(lambda item: not stateTree in item, items))
-    newItems.append(treeItem(stateTreeSha, stateTree))
-    return newItems
-    
-def fetchUserRef(hideErrors=False):
+def fetchRef(ref, hideErrors=False):
     remote = getFromConfig(configRemote)
-    ref = userTreeRef()
     errors = DEVNULL if hideErrors else None
     call("git fetch --quiet -f " + remote + " " + ref + ":" + ref, errors=errors)
 
-def renewUserRef(treeSha, quiet=False, renewRemote=True):
-    quietComponent = " --quiet" if quiet else ""
-    call("git update-ref " + userTreeRef() + " " + treeSha)
-    if renewRemote:
-        call("git push --force " + getFromConfig(configRemote) + " " + userTreeRef() + quietComponent)
-
-def saveCurrentState(quiet=False, customTitle=None, customId=None):
-    items = treeItems(userTree())
-    state = createStateTree()
-    meta = createMetaBlob(state, customTitle=customTitle, customId=customId)
-    items = updateMetaInItems(items, meta, customId=customId)
-    items = updateStateInItems(items, state, customId=customId)
-    newUserTree = createTree(items)
-    renewUserRef(newUserTree, quiet=quiet)
+def fetchListRef(hideErrors=False):
+    ref = workstationsListRef()
+    fetchRef(ref, hideErrors)
+"""
+def fetchWorkstationRef(workstation)
+    ref = workstationRef(workstation)
+    fetchRef(ref, hideErrors=True)"""
     
-def availableMetas(noCurrent=False):
-    tree = userTree()
-    items = treeItems(tree)
-    blobs = filter(lambda item: metaBlobPrefix in item, items)
-    if noCurrent:
-        currentId = getFromConfig(configWorkstationId)
-        blobs = filter(lambda item: not currentId in item, blobs)
-    metasSha = list(map(itemSha, blobs))
-    return list(map(metaDict, metasSha))
+def fetchAllRefs():
+    fetchListRef()
+    for ref in workstationsRefs():
+        fetchRef(ref, hideErrors=True)  #ref may be unavailable, if no save available from specified workstation
+
+def updateRef(ref, sha, quiet=False, renewRemote=True):
+    quietComponent = " --quiet" if quiet else ""
+    call("git update-ref " + ref + " " + sha)
+    if renewRemote:
+        call("git push --force " + getFromConfig(configRemote) + " " + ref + quietComponent)
+
+def saveCurrentState(state=None, quiet=False, customTitle=None, customId=None):
+    workstation = customId if customId else getFromConfig(configWorkstationId)
+    currentState = state if state else createStateTree()
+    registerWorkstation(workstation)
+    
+    ref = workstationRef(workstation)
+    if ref:
+        items = treeItems(ref)
+    else:
+        items = list()
+    
+    meta = createMetaBlob(currentState, customTitle=customTitle, customId=customId)
+    items = updateMetaInItems(items, meta)
+    items = updateStateInItems(items, currentState)
+    workstationTree = createTree(items)
+    updateRef(ref, workstationTree, quiet=quiet)
+    
+def availableMetas(withFetch=False, noCurrent=False):
+    if withFetch:
+        fetchAllRefs()
+        
+    refs = workstationsRefs()
+    currentId = getFromConfig(configWorkstationId)
+    metaDicts = list()
+   
+    for ref in refs:
+        if noCurrent and currentId in ref:
+            continue
+        items = treeItems(ref)
+        stationMetaItems = filter(lambda item: metaBlobName in item, items)
+        stationMetaShas = map(itemSha, stationMetaItems)
+        stationMetaDicts = map(metaDict, stationMetaShas)
+        metaDicts.extend(stationMetaDicts)
+
+    return metaDicts
+    
+def registerWorkstation(uuid):
+    fetchListRef(hideErrors=True)
+    
+    if not checkWorkstationsListRef():
+        workstations = uuid
+    else:
+        workstations = run("git cat-file -p " + workstationsListRef())
+        if uuid in workstations:
+            return
+        workstations = workstations + "\n" + uuid
+            
+    listSha = popenCommunicate("git hash-object -w --stdin", workstations)
+    updateRef(workstationsListRef(), listSha, quiet=True)
+    

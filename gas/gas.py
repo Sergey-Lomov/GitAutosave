@@ -16,13 +16,13 @@ from gas.common import messages
 from gas.common.constants import *
 from gas.common.enumerations import Flags, Subcommands
 from gas.utils.execution import run, call, popenCommunicate, backgroundDetachedPopen
-from gas.utils.tree import fetchUserRef, renewUserRef, userTree, checkUserTree, createTree, createStateTree, availableMetas, saveCurrentState, treeItems, getStateFromItems
+from gas.utils.tree import registerWorkstation, currentWorkstationRef, checkWorkstationsListRef, createStateTree, availableMetas, saveCurrentState, treeItems, getStateFromItems
 from gas.utils.services import getFromConfig, setToConfig, printMetasDicts, printAutosaveProcesses, mainDir, flagsForStrings
 
 #Data storing concept
-"""For every user creates tree with all data, related to gas util. This tree calls 'User tree' and may be found by ref in format refs/gas/username
-Users tree contains pair tree-blob for each workstation. Tree contains project state at specified workstation and calls 'State tree'
-Blob contains metadata as list of key-value pairs. This lbob calls 'MetaBlob'. 
+"""One ref, calls user-ref, containts blob with list of all workstations id. For any workstation exist separate ref, based on it uuid. 
+Workstation ref contains tree with two items: blob with save methadata (meta-blob) and tree with files state (state tree). 
+For pre-restore save creates separate workstation tree with id based on user name.
 """
 
 def init(flags=[]):
@@ -46,10 +46,7 @@ def init(flags=[]):
         setToConfig(configRemote, remote)
     print(messages.remoteSettedFormat.format(remote, configRemote))
     
-    fetchUserRef(hideErrors=True)
-    if not checkUserTree():
-        tree = createTree([])
-        renewUserRef(tree, quiet=True)
+    registerWorkstation(workstationId)
 
 def showHelp(flags=[]):
     print("Help stub")
@@ -60,9 +57,7 @@ def restore(flags=[]):
     forced = Flags.forced in flags
     noPreRestore = Flags.noPreRestore in flags
 
-    fetchUserRef()
-    
-    metasDicts = availableMetas(noCurrent=noCurrent)
+    metasDicts = availableMetas(withFetch=True, noCurrent=noCurrent)
     if not metasDicts:
         print(messages.noSavesAvailable)
         return
@@ -94,7 +89,7 @@ def save(flags=[]):
     forced = Flags.forced in flags
     quiet = Flags.quiet in flags
 
-    items = treeItems(userTree())
+    items = treeItems(currentWorkstationRef())
     state = createStateTree()
     oldState = getStateFromItems(items)
 
@@ -102,11 +97,10 @@ def save(flags=[]):
         print(messages.nothingToSave)
         return
     
-    saveCurrentState(quiet=quiet)
+    saveCurrentState(state=state, quiet=quiet)
 
 def showList(flags=[]):
-    fetchUserRef()
-    metasDicts = availableMetas()
+    metasDicts = availableMetas(withFetch=True)
     
     if not metasDicts:
         print(messages.noSavesAvailable)
@@ -201,7 +195,7 @@ def main():
         possibleWithoutInit = True
     
     if not possibleWithoutInit:
-        if not checkUserTree():
+        if not checkWorkstationsListRef():
             print(messages.notInitMessage)
             return
 
